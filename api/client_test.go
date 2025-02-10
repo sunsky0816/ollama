@@ -1,6 +1,12 @@
 package api
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"testing"
 )
 
@@ -39,6 +45,84 @@ func TestClientFromEnvironment(t *testing.T) {
 
 			if client.base.String() != v.expect {
 				t.Fatalf("expected %s, got %s", v.expect, client.base.String())
+			}
+		})
+	}
+}
+
+func TestClientStreamErrorResponse(t *testing.T) {
+	testCases := []struct {
+		name        string
+		statusCode  int
+		response    string
+		wantErr     bool
+		errorType   any // type to check error against (if specified)
+		wantMessage string
+	}{
+		{
+			name:        "error with message",
+			statusCode:  http.StatusBadRequest,
+			response:    `{"error": "test error message"}`,
+			wantErr:     true,
+			errorType:   &StatusError{},
+			wantMessage: "test error message",
+		},
+		{
+			name:        "error without message",
+			statusCode:  http.StatusInternalServerError,
+			response:    `{}`,
+			wantErr:     true,
+			errorType:   &StatusError{},
+			wantMessage: "",
+		},
+		{
+			name:        "error with ok status code",
+			statusCode:  http.StatusOK,
+			response:    `{"error": "test error message"}`,
+			wantErr:     true,
+			wantMessage: "test error message",
+		},
+		{
+			name:       "no error with ok status code",
+			statusCode: http.StatusOK,
+			response:   `{"response": "ok"}`,
+			wantErr:    false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set up test server to simulate API responses
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.statusCode)
+				fmt.Fprintln(w, tc.response)
+			}))
+			defer ts.Close()
+
+			client := NewClient(&url.URL{Scheme: "http", Host: ts.Listener.Addr().String()}, http.DefaultClient)
+
+			// Test stream method with a no-op callback
+			err := client.stream(context.Background(), http.MethodGet, "/test", nil, func([]byte) error {
+				return nil
+			})
+
+			// Verify error behavior matches expectations
+			if tc.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+					return
+				}
+				if tc.errorType != nil {
+					if !errors.As(err, &tc.errorType) {
+						t.Errorf("expected error of type %T, got %T", tc.errorType, err)
+						return
+					}
+				}
+				if statusErr, ok := err.(*StatusError); ok && statusErr.ErrorMessage != tc.wantMessage {
+					t.Errorf("expected error message %q, got %q", tc.wantMessage, statusErr.ErrorMessage)
+				}
+			} else if err != nil {
+				t.Errorf("expected no error, got %v", err)
 			}
 		})
 	}
