@@ -109,20 +109,19 @@ func TestClientStreamErrorResponse(t *testing.T) {
 			// Verify error behavior matches expectations
 			if tc.wantErr {
 				if err == nil {
-					t.Error("expected error, got nil")
-					return
+					t.Error("got nil error, want error")
 				}
 				if tc.errorType != nil {
 					if !errors.As(err, &tc.errorType) {
-						t.Errorf("expected error of type %T, got %T", tc.errorType, err)
+						t.Errorf("got error type %T, want %T", err, tc.errorType)
 						return
 					}
 				}
 				if statusErr, ok := err.(*StatusError); ok && statusErr.ErrorMessage != tc.wantMessage {
-					t.Errorf("expected error message %q, got %q", tc.wantMessage, statusErr.ErrorMessage)
+					t.Errorf("got error message %q, want %q", statusErr.ErrorMessage, tc.wantMessage)
 				}
 			} else if err != nil {
-				t.Errorf("expected no error, got %v", err)
+				t.Errorf("unexpected error: %v", err)
 			}
 		})
 	}
