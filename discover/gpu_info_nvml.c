@@ -10,7 +10,7 @@ void nvml_init(char *nvml_lib_path, nvml_init_resp_t *resp) {
   const int buflen = 256;
   char buf[buflen + 1];
   int i;
-
+//test
   struct lookup {
     char *s;
     void **p;
